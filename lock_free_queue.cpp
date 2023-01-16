@@ -3,7 +3,6 @@
 #include <vector>
 #include <thread>
 #include <atomic>
-#include <functional>
 
 int main() {
     using Task = int;
