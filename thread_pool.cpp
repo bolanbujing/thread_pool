@@ -45,6 +45,31 @@ private:
 class ThreadPool {
 public:
     explicit ThreadPool() : worker_cnt_(std::thread::hardware_concurrency()), index_(0) {
+        init();
+    }
+    explicit ThreadPool(int thread_num) : worker_cnt_(thread_num), index_(0) {
+        assert(worker_cnt_ > 0);
+        init();
+    }
+    
+    void AddTask(TaskQueue::Task&& t) {
+        std::size_t i = index_.fetch_add(1);
+        task_que_[i%worker_cnt_]->AddTask(std::forward<TaskQueue::Task>(t));
+    }
+
+    std::size_t Size(std::size_t i) {
+        assert(i < worker_cnt_);
+        return task_que_[i]->Size();
+    }
+    
+    void Join() {
+        for (auto& item : worker_) {
+            item.join();
+        }
+    }
+
+private:
+    void init() {
         try {
             for(std::size_t i = 0; i < worker_cnt_; i++) {
                 task_que_.push_back(std::make_shared<TaskQueue>());
@@ -62,22 +87,6 @@ public:
             std::cout << "catch exception : "<< e.what() << std::endl;
         }
     }
-    
-    void AddTask(TaskQueue::Task&& t) {
-        std::size_t i = (index_++)%worker_cnt_;
-        task_que_[i]->AddTask(std::forward<TaskQueue::Task>(t));
-    }
-
-    std::size_t Size(std::size_t i) {
-        assert(i < worker_cnt_);
-        return task_que_[i]->Size();
-    }
-    
-    void Join() {
-        for (auto& item : worker_) {
-            item.join();
-        }
-    }
 private:
     std::vector<std::thread> worker_;
     std::size_t worker_cnt_;
@@ -86,21 +95,21 @@ private:
 };
 
 int main() {
-    ThreadPool pool;
+    ThreadPool pool(3);
     auto start = std::chrono::high_resolution_clock::now();
 
-    std::thread t([&pool](){
-        for(;;){
-            std::cout << "que size ======================================= " << pool.Size(1) << std::endl;
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        }
-    });
+    // std::thread t([&pool](){
+    //     for(;;){
+    //         std::cout << "que size ======================================= " << pool.Size(1) << std::endl;
+    //         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    //     }
+    // });
     std::vector<std::thread> vec;
     for(int x = 0; x < 3; x++) {
         vec.push_back(std::thread([&pool, start, x]() {
             //std::this_thread::sleep_for(std::chrono::milliseconds(50));
             auto id = std::this_thread::get_id();
-            for (int i = x*1000000; i < (x+1)*1000000; i++) {
+            for (int i = x*10000; i < (x+1)*10000; i++) {
                 pool.AddTask([id, i, start](){
                     auto dur = (std::chrono::high_resolution_clock::now() - start);
                     std::cout << "from thread id = " << id << " ,i=" << i << "  ,线程id = " <<
@@ -116,6 +125,6 @@ int main() {
         item.join();
     }
     pool.Join();
-    t.join();   
+    //t.join();   
     return 0;
 }
